@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
+import os
 #reload(sys)
 #sys.setdefaultencoding('utf8')
 #1.将问题ID和TOPIC对应关系保持到字典里：process question_topic_train_set.txt
@@ -8,13 +9,22 @@ import sys
 #     (question_id,topic_id2)
 #read question_topic_train_set.txt
 import codecs
+
+pp_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+q_t =pp_dir + '/ieee_zhihu_cup/question_topic_train_set.txt'
+q= pp_dir + '/ieee_zhihu_cup/question_train_set.txt'
+
+test_break_size = 600000
+
 #1.################################################################################################################
 print("process question_topic_train_set.txt,started...")
-q_t='question_topic_train_set.txt'
 q_t_file = codecs.open(q_t, 'r', 'utf8')
-lines=q_t_file.readlines()
 question_topic_dict={}
-for i,line in enumerate(lines):
+
+line = q_t_file.readline()
+i = 0
+while line:
+    i += 1
     if i%300000==0:
         print(i)
     #print(line)
@@ -23,25 +33,32 @@ for i,line in enumerate(lines):
     #print(topic_list_string)
     topic_list=topic_list_string.replace("\n","").split(",")
     question_topic_dict[question_id]=topic_list
+    line = q_t_file.readline()
     #for ii,topic in enumerate(topic_list):
     #    print(ii,topic)
     #print("=====================================")
     #if i>10:
     #   print(question_topic_dict)
     #   break
+    if i > test_break_size:
+        break
 print("process question_topic_train_set.txt,ended...")
 ###################################################################################################################
 ###################################################################################################################
 #2.处理问题--得到问题ID：问题的表示，存成字典。proces question. for every question form a a list of string to reprensent it.
 import codecs
 print("process question started11...")
-q='question_train_set.txt'
 q_file = codecs.open(q, 'r', 'utf8')
-q_lines=q_file.readlines()
 questionid_words_representation={}
 question_representation=[]
 length_desc=30
-for i,line in enumerate(q_lines):
+
+line = q_file.readline()
+i = 0
+while line:
+    i += 1
+    if i%300000==0:
+        print(i)
     #print("line:")
     #print(line)
     element_lists=line.split('\t') #['c324,c39','w305...','c']
@@ -59,10 +76,15 @@ for i,line in enumerate(q_lines):
     desc_c=[x for x in element_lists[3].strip().split(",")][-length_desc:]
     #print("desc_c:", desc_c)
     question_representation =title_words+ title_c+desc_words+ desc_c
-    question_representation=" ".join(question_representation)
-    #print("question_representation:",question_representation)
-    #print("question_representation:",question_representation)
-    questionid_words_representation[question_id]=question_representation
+
+    #questionid_words_representation[question_id]=question_representation
+    ###############################################################
+    #To simplify model, use just title words
+    ###############################################################
+    questionid_words_representation[question_id]=title_words
+    line = q_file.readline()
+    if i > test_break_size:
+        break
 q_file.close()
 print("proces question ended2...")
 #####################################################################################################################
@@ -78,7 +100,8 @@ train_zhihu = 'train-zhihu6-title-desc.txt'
 test_zhihu = 'test-zhihu6-title-desc.txt'
 valid_zhihu = 'valid-zhihu6-title-desc.txt'
 data_list = []
-multi_label_flag=True
+multi_label_flag=False
+topic_set = set()
 
 def split_list(listt):
     random.shuffle(listt)
@@ -90,19 +113,25 @@ def split_list(listt):
     test = listt[int(list_len * (train_len + valid_len)):]
     return train, valid, test
 
+using_top1_model = True #only keeps the top1 topic for each question
 for question_id, question_representation in questionid_words_representation.items():
     # print("===================>")
     # print('question_id',question_id)
     # print("question_representation:",question_representation)
     # get label_id for this question_id by using:question_topic_dict
     topic_list = question_topic_dict[question_id]
+    topic_set = topic_set.union(set(topic_list))
     # print("topic_list:",topic_list)
     # if count>5:
     #    ii=0
     #    ii/0
     if not multi_label_flag:
-        for topic_id in topic_list:
-            data_list.append((question_representation, topic_id)) #single-label
+        if using_top1_model:
+            if len(topic_list) > 0:
+                data_list.append((question_representation, topic_list[0])) #single-label
+        else:
+            for topic_id in topic_list:
+                data_list.append((question_representation, topic_id)) #single-label
     else:
         data_list.append((question_representation, topic_list)) #multi-label
     count = count + 1
@@ -110,6 +139,37 @@ for question_id, question_representation in questionid_words_representation.item
 # random shuffle list
 random.shuffle(data_list)
 
+#####################################################################################################################
+###################################################################################################################
+# 4. 根据需要裁剪数据模型获得较小模型。以{问题的表示：TOPIC_ID}的形式的列表
+# save training data,testing data: question __label__topic_id
+print("saving traininig data.started2...")
+using_small_model = True
+small_data_threshold= count*0.1
+small_count=0
+small_topic_size = 0
+
+#import pdb
+#pdb.set_trace()
+
+if not multi_label_flag and using_small_model:
+    print("cut traininig data to small size, orig_size %d..." % len(data_list))
+    small_data_list = []
+    for topic_id in topic_set:
+        small_topic_size += 1
+        small_data_list.extend([(q, t) for q,t in data_list if t == topic_id])
+        print("topic %s, now data_size %d" % (topic_id, len(small_data_list)))
+        if len(small_data_list) >= small_data_threshold:
+            break
+    data_list = small_data_list
+    # random shuffle list
+    random.shuffle(data_list)
+    print("cut traininig data to small size, new_size %d, topic_size %d..." %
+            (len(data_list), small_topic_size))
+
+#####################################################################################################################
+###################################################################################################################
+# 5. 存储结果到本地文件系统。以{问题的表示：TOPIC_ID}的形式的列表
 def write_data_to_file_system(file_name, data):
     file = codecs.open(file_name, 'a', 'utf8')
     for d in data:
