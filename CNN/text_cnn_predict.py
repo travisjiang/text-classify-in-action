@@ -11,7 +11,7 @@ from data_util_zhihu import load_data_predict,load_final_test_data,create_voabul
 from tflearn.data_utils import pad_sequences #to_categorical
 import os
 import codecs
-from p7_TextCNN_model import TextCNN
+from text_cnn_model import TextCNN
 
 #configuration
 FLAGS=tf.app.flags.FLAGS

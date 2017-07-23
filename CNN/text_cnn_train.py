@@ -11,7 +11,7 @@ import os
 import word2vec
 import pickle
 
-from p7_TextCNN_model import TextCNN
+from text_cnn_model import TextCNN
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, dir_path + "/../data_util")
@@ -36,21 +36,21 @@ tf.app.flags.DEFINE_integer("sentence_len", 50, "max sentence length")
 tf.app.flags.DEFINE_integer("embed_size", 256, "embedding size")
 tf.app.flags.DEFINE_boolean(
     "is_training", True, "is traning.true:tranining,false:testing/inference")
-tf.app.flags.DEFINE_integer("num_epochs", 17, "number of epochs to run.")
+tf.app.flags.DEFINE_integer("num_epochs", 15, "number of epochs to run.")
 tf.app.flags.DEFINE_integer(
-    "validate_every", 15, "Validate every validate_every epochs.")  # 每10轮做一次验证
+    "validate_every", 3, "Validate every validate_every epochs.")  # 每10轮做一次验证
 tf.app.flags.DEFINE_boolean("use_embedding", True,
                             "whether to use embedding or not.")
 #tf.app.flags.DEFINE_string("cache_path","text_cnn_checkpoint/data_cache.pik","checkpoint location for the model")
 # train-zhihu4-only-title-all.txt
 # O.K.train-zhihu4-only-title-all.txt-->training-data/test-zhihu4-only-title.txt--->'training-data/train-zhihu5-only-title-multilabel.txt'
 tf.app.flags.DEFINE_string(
-    "training_data_path", "train-zhihu6-title-desc.txt", "path of traning data.")
+    "training_data_path", "data_set/preprocessd_data/train_set_small_title.txt", "path of traning data.")
 tf.app.flags.DEFINE_integer(
     "num_filters", 64, "number of filters")  # 256--->512
 # zhihu-word2vec.bin-100-->zhihu-word2vec-multilabel-minicount15.bin-100
 tf.app.flags.DEFINE_string(
-    "word2vec_model_path", "ieee_zhihu_cup/word_embedding.txt", "word2vec's vocabulary and vectors")
+    "word2vec_model_path", "data_set/ieee_zhihu_cup/word_embedding.txt", "word2vec's vocabulary and vectors")
 tf.app.flags.DEFINE_boolean(
     "multi_label_flag", False, "use multi label or single label.")
 filter_sizes = [1, 2, 3, 4, 5, 6, 7]  # [1,2,3,4,5,6,7]
