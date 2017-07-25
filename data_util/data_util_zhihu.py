@@ -13,15 +13,15 @@ sys.path.insert(0, dir_path + "/..")
 from config import zhihu_config
 
 
-
-
 PAD_ID = 0
 _GO = "_GO"
 _END = "_END"
 _PAD = "_PAD"
 
 
-def create_voabulary_input(word2vec_model_path=zhihu_config[word_embedding], name_scope=''):
+def create_vocabulary_x(word2vec_model_path, name_scope=''):
+    if not word2vec_model_path:
+        return None,None
     vocabulary_word2index = {}
     vocabulary_index2word = {}
     print("create vocabulary. word2vec_model_path:", word2vec_model_path)
@@ -38,10 +38,10 @@ def create_voabulary_input(word2vec_model_path=zhihu_config[word_embedding], nam
     return vocabulary_word2index, vocabulary_index2word
 
 
-def create_voabulary_output(training_data_path=zhihu_config[train_set_question_topic],
-        name_scope='', use_seq2seq=False):
+def create_voabulary_y(training_data_path=zhihu_config[train_set_question_topic],
+                            name_scope='', use_seq2seq=False):
     print("create_voabulary_label_sorted.started.training_data_path:",
-            training_data_path)
+          training_data_path)
     zhihu_f_train = codecs.open(training_data_path, 'r', 'utf8')
     lines = zhihu_f_train.readlines()
     count = 0
@@ -77,8 +77,9 @@ def create_voabulary_output(training_data_path=zhihu_config[train_set_question_t
           len(vocabulary_index2word_label))
     return vocabulary_word2index_label, vocabulary_index2word_label
 
+
 def pad_sequences_str(trainX, maxlen=100, padding='post', truncating='post',
-        value=0.):
+                      value=0.):
     pad_X = []
     for x in trainX:
         if len(trainX) > maxlen:
@@ -96,54 +97,121 @@ def pad_sequences_str(trainX, maxlen=100, padding='post', truncating='post',
     return pad_X
 
 
-def file2XY(path, is_multi_label = False):
+class Vocabulary:
+    def __init__(self, w2i=None, i2w=None, count=None):
+        self.w2i = w2i
+        self.i2w = i2w
+        self.count = count
+
+    def word2index(self, word, default_value):
+        if self.w2i:
+            if word in self.w2i.keys():
+                return self.w2i[word]
+            elif not self.i2w:
+                self.count += 1
+                self.w2i[word] = self.count
+                return self.count
+        else:
+            self.w2i = {}
+        return default_value
+
+    def index2word(self, index, default_value):
+        if not self.w2i:
+            self.i2w = {i: w for w, i in self.w2i.items()}
+        return self.i2w.get(index, default_value)
+
+def parse_train_file(path):
     with codecs.open(path, 'r', 'utf8') as f:
-        X = []
-        Y = []
 
         line = f.readline()
         while line:
-            # x='w17314 w5521 w7729 w767 w10147 w111'
-            x, y = line.split('__label__')
-            y = y.strip().replace('\n', '')
-            element_lists = x.split('\t')  # ['c324,c39','w305...','c']
+            x, y = line.split("__label__")
+            y = y.strip().replace("\n", "").split(',')
 
-            title_chars = [x for x in element_lists[0].strip().split(",")
-                           ][-length_desc:]
-            title_words = [x for x in element_lists[1].strip().split(",")
-                           ][-length_desc:]
-            desc_chars = [x for x in element_lists[2].strip().split(",")
-                          ][-length_desc:]
-            desc_words = [x for x in element_lists[3].strip().split(",")
-                          ][-length_desc:]
-            if i < 1:
-                print(i, "x0:", x)  # get raw x
-            # x_=process_one_sentence_to_get_ui_bi_tri_gram(x)
-            x = x.split(" ")
-            # if can't find the word, set the index as '0'.(equal to PAD_ID = 0)
-            x = [vocabulary_word2index.get(e, 0) for e in x]
-            if i < 2:
-                print(i, "x1:", x)  # word to index
+            element_lists = x.split('\t')
 
-            if multi_label_flag:  # 2)prepare multi-label format for classification
-                ys = y.replace('\n', '').split(" ")  # ys is a list
-                ys_index = []
-                for y in ys:
-                    y_index = vocabulary_word2index_label[y]
-                    ys_index.append(y_index)
-                ys_mulithot_list = transform_multilabel_as_multihot(ys_index)
-            else:  # 3)prepare single label format for classification
-                ys_mulithot_list = vocabulary_word2index_label[y]
-
-            if i <= 3:
-                print("ys_index:")
-                # print(ys_index)
-                # ," ;ys_decoder_input:",ys_decoder_input)
-                print(i, "y:", y, " ;ys_mulithot_list:", ys_mulithot_list)
-            X.append(x)
-            Y.append(ys_mulithot_list)
+            title_chars = [x for x in element_lists[0].strip().split(",")]
+            title_words = [x for x in element_lists[1].strip().split(",")]
+            desc_chars = [x for x in element_lists[2].strip().split(",")]
+            desc_words = [x for x in element_lists[3].strip().split(",")]
+            yield title_chars, title_words, desc_chars, desc_words, y
 
             line = f.readline()
+
+def load_data(train_data_path,
+        paddings=zhihu_config[question_paddings],
+        word2vec_model_path=zhihu_config[word_embedding],
+        char2vec_model_path=zhihu_config[char_embedding],
+        label_path= zhihu_config[train_set_question_topic]):
+
+    Y, X_title_char, X_title_word, X_desc_char, X_desc_word = []*5
+
+    word2index, index2word = create_vocabulary_x(word2vec_model_path)
+    char2index, index2char = create_vocabulary_x(char2vec_model_path)
+    label2index, index2label = create_vocabulary_y(label_path)
+
+    x_word_vocab = Vocabulary(word2index, index2word)
+    x_char_vocab = Vocabulary(char2index, index2char)
+    y_label_vocab = Vocabulary(label2index, index2label)
+
+    i = 0
+    for tc, tw, dc, dw, y in parse_train_file(data_path):
+        if i < 2:
+            i += 1
+            print(i, "x before:", [tc,tw,dc,dw])
+            print(i, "y before:", y)
+
+        # if can't find the word, set the index as '0'.(equal to PAD_ID =
+        # 0)
+        tc = [x_char_vocab.word2index(c, 0) for c in tc]
+        tw = [x_word_vacab.word2index(w, 0) for w in tw]
+        dc = [x_char_vocab.word2index(c, 0) for c in dc]
+        dw = [x_word_vocab.word2index(w, 0) for w in dw]
+        y = [y_label_vocab.word2index(l, 0) for l in y]
+
+        if i < 2:
+            print(i, "x after:", [tc,tw,dc,dw])
+            print(i, "y after:", y)
+
+        X_title_char.append(tc)
+        X_title_word.append(tw)
+        X_desc_char.append(dc)
+        X_desc_word.appedn(dw)
+        Y.append(y)
+
+    # pad sequences
+    X = [X_title_char, X_title_word, X_desc_char, X_desc_word]
+    assert len(X) == len(paddings)
+    for i in range(len(X)):
+       X[i] = pad_sequences(X[i], maxlen=paddings[i], value=0.)
+    X_title_char, X_title_word, X_desc_char, X_desc_word = X
+
+    #create embed
+    x_char_embed = _create_embedding(x_char_vocab, char2vec_model_path)
+    x_word_embed = _create_embedding(x_word_vocab, word2vec_model_path)
+    E = [x_char_embed, x_word_embed, x_char_embed, x_word_embed]
+
+    return X, Y, E
+
+def _create_embedding(vocab, model_path):
+    if not model_path:
+        return None
+
+    word2vec_model = word2vec.load(model_path)
+    vocab_szie = len(word2vec_model.vocab)
+    word_embedding = [None] * vocab_size  # create an empty word_embedding list.
+    for word, vector in zip(word2vec_model.vocab, word2vec_model.vectors):
+        word_embedding[vocab.word2index[word]] = vector
+
+    bound = np.sqrt(6.0) / np.sqrt(vocab_size)  # bound for random variables.
+    embed_size = len(word2vec_model.vectors[0])
+    for i in range(vocab_size):
+        if len(word_embedding[i]) != embed_size:
+            word_embedding[i] = np.random.uniform(-bound, bound, embed_size);
+
+    word_embedding = np.array(word_embedding)  # covert to 2d array.
+    return word_embedding
+
 
 def load_data_default()
     """
@@ -213,8 +281,6 @@ def load_data_default()
     # 5.return
     print("load_data.ended...")
     return train, test, test
-
-
 
 
 def load_data_simple(vocabulary_word2index,
