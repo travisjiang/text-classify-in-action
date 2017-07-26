@@ -139,7 +139,7 @@ def parse_train_file(path):
             line = f.readline()
 
 def load_data(train_data_path,
-        paddings=zhihu_config[question_paddings],
+        paddings=zhihu_config[question_paddings_same],
         word2vec_model_path=zhihu_config[word_embedding],
         char2vec_model_path=zhihu_config[char_embedding],
         label_path= zhihu_config[train_set_question_topic]):
@@ -211,76 +211,6 @@ def _create_embedding(vocab, model_path):
 
     word_embedding = np.array(word_embedding)  # covert to 2d array.
     return word_embedding
-
-
-def load_data_default()
-    """
-    input: a file path
-    :return: train, test, valid.
-    where train=(trainX, trainY).
-    where trainX: is a list of list.each list representation a sentence.
-          trainY: is a list of label. each label is a number
-    """
-    # 1.load a zhihu data from file
-    # example:"w305 w6651 w3974 w1005 w54 w109 w110 w3974 w29 w25 w1513 w3645
-    # w6 w111 __label__-400525901828896492"
-    print("load_data.started...")
-    train_data_path = zhihu_config['train_set_question_topic']
-    test_data_path = zhihu_config['test_set_question_topic']
-    valid_data_path = zhihu_config['valid_set_question_topic']
-
-    print("load_data_from:", training_data_path)
-    # -zhihu4-only-title.txt
-    zhihu_f = codecs.open(training_data_path, 'r', 'utf8')
-    lines = zhihu_f.readlines()
-    # 2.transform X as indices
-    # 3.transform  y as scalar
-    X = []
-    Y = []
-    Y_decoder_input = []  # ADD 2017-06-15
-    for i, line in enumerate(lines):
-        # x='w17314 w5521 w7729 w767 w10147 w111'
-        x, y = line.split('__label__')
-        y = y.strip().replace('\n', '')
-        x = x.strip()
-        if i < 1:
-            print(i, "x0:", x)  # get raw x
-        # x_=process_one_sentence_to_get_ui_bi_tri_gram(x)
-        x = x.split(" ")
-        # if can't find the word, set the index as '0'.(equal to PAD_ID = 0)
-        x = [vocabulary_word2index.get(e, 0) for e in x]
-        if i < 2:
-            print(i, "x1:", x)  # word to index
-
-        if multi_label_flag:  # 2)prepare multi-label format for classification
-            ys = y.replace('\n', '').split(" ")  # ys is a list
-            ys_index = []
-            for y in ys:
-                y_index = vocabulary_word2index_label[y]
-                ys_index.append(y_index)
-            ys_mulithot_list = transform_multilabel_as_multihot(ys_index)
-        else:  # 3)prepare single label format for classification
-            ys_mulithot_list = vocabulary_word2index_label[y]
-
-        if i <= 3:
-            print("ys_index:")
-            # print(ys_index)
-            # ," ;ys_decoder_input:",ys_decoder_input)
-            print(i, "y:", y, " ;ys_mulithot_list:", ys_mulithot_list)
-        X.append(x)
-        Y.append(ys_mulithot_list)
-        # if i>50000:
-        #    break
-    # 4.split to train,test and valid data
-    number_examples = len(X)
-    print("number_examples:", number_examples)
-    train = (X[0:int((1 - valid_portion) * number_examples)],
-             Y[0:int((1 - valid_portion) * number_examples)])
-    test = (X[int((1 - valid_portion) * number_examples) + 1:],
-            Y[int((1 - valid_portion) * number_examples) + 1:])
-    # 5.return
-    print("load_data.ended...")
-    return train, test, test
 
 
 def load_data_simple(vocabulary_word2index,

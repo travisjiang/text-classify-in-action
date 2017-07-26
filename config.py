@@ -37,4 +37,8 @@ zhihu_config = {
     # cache
     'vocabulary_cache': vocabulary_cache
 
+    # padding
+    'question_paddings_same': [100,100,100,100]
+    'question_paddings_diff': [100,50,200,100]
+
 }
