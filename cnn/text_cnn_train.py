@@ -41,14 +41,11 @@ tf.app.flags.DEFINE_integer(
     "validate_every", 3, "Validate every validate_every epochs.")  # 每10轮做一次验证
 tf.app.flags.DEFINE_boolean("use_embedding", True,
                             "whether to use embedding or not.")
-#tf.app.flags.DEFINE_string("cache_path","text_cnn_checkpoint/data_cache.pik","checkpoint location for the model")
-# train-zhihu4-only-title-all.txt
-# O.K.train-zhihu4-only-title-all.txt-->training-data/test-zhihu4-only-title.txt--->'training-data/train-zhihu5-only-title-multilabel.txt'
+tf.app.flags.DEFINE_string("cache_path","text_cnn_checkpoint/data_cache.pik","checkpoint location for the model")
 tf.app.flags.DEFINE_string(
     "training_data_path", "data_set/preprocessd_data/train_set_small_title.txt", "path of traning data.")
 tf.app.flags.DEFINE_integer(
     "num_filters", 64, "number of filters")  # 256--->512
-# zhihu-word2vec.bin-100-->zhihu-word2vec-multilabel-minicount15.bin-100
 tf.app.flags.DEFINE_string(
     "word2vec_model_path", "data_set/ieee_zhihu_cup/word_embedding.txt", "word2vec's vocabulary and vectors")
 tf.app.flags.DEFINE_boolean(
@@ -59,78 +56,43 @@ filter_sizes = [1, 2, 3, 4, 5, 6, 7]  # [1,2,3,4,5,6,7]
 
 
 def main(_):
-    # 1.load data(X:list of lint,y:int).
-    # if os.path.exists(FLAGS.cache_path):  # 如果文件系统中存在，那么加载故事（词汇表索引化的）
-    #    with open(FLAGS.cache_path, 'r') as data_f:
-    #        trainX, trainY, testX, testY, vocabulary_index2word=pickle.load(data_f)
-    #        vocab_size=len(vocabulary_index2word)
-    # else:
-    if 1 == 1:
-        trainX, trainY, testX, testY = None, None, None, None
-        vocabulary_word2index, vocabulary_index2word = create_voabulary_input(
-            word2vec_model_path=FLAGS.word2vec_model_path, name_scope="cnn2")  # simple='simple'
-        vocab_size = len(vocabulary_word2index)
-        print("cnn_model.vocab_size:", vocab_size)
+    # 1. load data
+    trainX, trainY, testX, testY = None, None, None, None
+    X, Y, E = load_data(zhihu_config['train_set_question_topic'])
+    # [None, sentence_len, embed_size]
+    X_title_char, X_title_word, X_desc_char, X_desc_word = X
+    X_char_embed, X_word_embed = E
 
-        vocabulary_word2index_label, vocabulary_index2word_label = create_voabulary_output(
-            training_data_path=FLAGS.training_data_path, name_scope="cnn2")
-        if FLAGS.multi_label_flag:
-            # test-zhihu5-only-title-multilabel.txt
-            FLAGS.training_data_path = 'training-data/train-zhihu6-title-desc.txt'
+    validX, validY = None, None
+    X, Y, E = load_data(zhihu_config['valid_set_question_topic'])
 
-        train, test, _ = load_data_simple(vocabulary_word2index,
-                                          vocabulary_word2index_label,
-                                          multi_label_flag=FLAGS.multi_label_flag,
-                                          training_data_path=FLAGS.training_data_path)  # ,training_data_path=FLAGS.training_data_path
-
-        trainX, trainY = train
-        testX, testY = test
-        # 2.Data preprocessing.Sequence padding
-        print("start padding & transform to one hot...")
-        # padding to max length
-        trainX = pad_sequences(trainX, maxlen=FLAGS.sentence_len, value=0.)
-        # padding to max length
-        testX = pad_sequences(testX, maxlen=FLAGS.sentence_len, value=0.)
-        # with open(FLAGS.cache_path, 'w') as data_f: #save data to cache file, so we can use it next time quickly.
-        #    pickle.dump((trainX,trainY,testX,testY,vocabulary_index2word),data_f)
-        print("trainX[0]:", trainX[0])
-        print("trainY[0]:", trainY[0])
-        # Converting labels to binary vectors
-        print("end padding & transform to one hot...")
     # 2.create session.
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:
+        train_and_validate(sess, trainX, trainY, validX, validY)
+    pass
+
+def train_and_validate():
         # Instantiate Model
-        textCNN = TextCNN(filter_sizes, FLAGS.num_filters, FLAGS.num_classes, FLAGS.learning_rate, FLAGS.batch_size, FLAGS.decay_steps,
-                          FLAGS.decay_rate, FLAGS.sentence_len, vocab_size, FLAGS.embed_size, FLAGS.is_training, multi_label_flag=FLAGS.multi_label_flag)
-        # Initialize Save
-        saver = tf.train.Saver()
-        if os.path.exists(FLAGS.ckpt_dir + "checkpoint"):
-            print("Restoring Variables from Checkpoint")
-            saver.restore(sess, tf.train.latest_checkpoint(FLAGS.ckpt_dir))
-        else:
-            print('Initializing Variables')
-            sess.run(tf.global_variables_initializer())
-            if FLAGS.use_embedding:  # load pre-trained word embedding
-                assign_pretrained_word_embedding(
-                    sess, vocabulary_index2word, vocab_size, textCNN, word2vec_model_path=FLAGS.word2vec_model_path)
-        curr_epoch = sess.run(textCNN.epoch_step)
+        title_char_cnn = initialize_and_save(sess)
+        title_word_cnn = initialize_and_save(sess)
+        desc_char_cnn = initialize_and_save(sess)
+        desc_word_cnn = initialize_and_save(sess)
+        curr_epoch = sess.run(title_char_cnn.epoch_step)
+
         # 3.feed data & training
         number_of_training_data = len(trainX)
         batch_size = FLAGS.batch_size
         for epoch in range(curr_epoch, FLAGS.num_epochs):
             loss, acc, counter = 0.0, 0.0, 0
             for start, end in zip(range(0, number_of_training_data, batch_size), range(batch_size, number_of_training_data, batch_size)):
-                if epoch == 0 and counter == 0:
-                    # ;print("trainY[start:end]:",trainY[start:end])
-                    print("trainX[start:end]:", trainX[start:end])
-                feed_dict = {
-                    textCNN.input_x: trainX[start:end], textCNN.dropout_keep_prob: 0.5}
-                if not FLAGS.multi_label_flag:
-                    feed_dict[textCNN.input_y] = trainY[start:end]
-                else:
-                    feed_dict[textCNN.input_y_multilabel] = trainY[start:end]
+                feed_dict = {title_char_cnn.input_x: X_title_char[start:end],
+                        title_word_cnn.input_x: X_title_word[start:end],
+                        desc_word_cnn.input_x: X_desc_word[start:end],
+
+                        textCNN.dropout_keep_prob: 0.5}
+                feed_dict[textCNN.input_y] = trainY[start:end]
                 curr_loss, curr_acc, _ = sess.run(
                     [textCNN.loss_val, textCNN.accuracy, textCNN.train_op], feed_dict)  # curr_acc--->TextCNN.accuracy
                 loss, counter, acc = loss + curr_loss, counter + 1, acc + curr_acc
@@ -142,9 +104,7 @@ def main(_):
             print("going to increment epoch counter....")
             sess.run(textCNN.epoch_increment)
 
-            # 4.validation
-            print(epoch, FLAGS.validate_every,
-                  (epoch % FLAGS.validate_every == 0))
+            # 4. if need validation
             if epoch % FLAGS.validate_every == 0:
                 eval_loss, eval_acc = do_eval(
                     sess, textCNN, testX, testY, batch_size, vocabulary_index2word_label)
@@ -154,11 +114,29 @@ def main(_):
                 save_path = FLAGS.ckpt_dir + "model.ckpt"
                 saver.save(sess, save_path, global_step=epoch)
 
-        # 5.最后在测试集上做测试，并报告测试准确率 Test
+        # 5. valid model after training
         test_loss, test_acc = do_eval(
             sess, textCNN, testX, testY, batch_size, vocabulary_index2word_label)
-    pass
 
+def initialize_and_save(sess):
+    textCNN = TextCNN(filter_sizes, FLAGS.num_filters,
+            FLAGS.num_classes, FLAGS.learning_rate, FLAGS.batch_size,
+            FLAGS.decay_steps, FLAGS.decay_rate, FLAGS.sentence_len,
+            vocab_size, FLAGS.embed_size, FLAGS.is_training,
+            multi_label_flag=FLAGS.multi_label_flag)
+    # Initialize Save
+    saver = tf.train.Saver()
+    if os.path.exists(FLAGS.ckpt_dir + "checkpoint"):
+        print("Restoring Variables from Checkpoint")
+        saver.restore(sess, tf.train.latest_checkpoint(FLAGS.ckpt_dir))
+    else:
+        print('Initializing Variables')
+        sess.run(tf.global_variables_initializer())
+        if FLAGS.use_embedding:  # load pre-trained word embedding
+            assign_pretrained_word_embedding(
+                sess, vocabulary_index2word, vocab_size, textCNN, word2vec_model_path=FLAGS.word2vec_model_path)
+
+    return textCNN
 
 def assign_pretrained_word_embedding(sess, vocabulary_index2word, vocab_size, textCNN, word2vec_model_path=None):
     print("using pre-trained word emebedding.started.word2vec_model_path:",
