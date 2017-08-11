@@ -19,23 +19,53 @@ _END = "_END"
 _PAD = "_PAD"
 
 
-def create_vocabulary_x(word2vec_model_path, name_scope=''):
+def create_vocabulary_from_model(word2vec_model_path, special_words):
     if not word2vec_model_path:
         return None,None
-    vocabulary_word2index = {}
-    vocabulary_index2word = {}
-    print("create vocabulary. word2vec_model_path:", word2vec_model_path)
+    vocab_word2index = {}
+    vocab_index2word = {}
+    print("create vocab. word2vec_model_path:", word2vec_model_path)
 
     model = word2vec.load(word2vec_model_path)
-    vocabulary_word2index['PAD_ID'] = 0
-    vocabulary_index2word[0] = 'PAD_ID'
-    special_index = 0
 
-    for i, vocab in enumerate(model.vocab):
-        vocabulary_word2index[vocab] = i + 1 + special_index
-        vocabulary_index2word[i + 1 + special_index] = vocab
+    counter = 0
+    for word in special_words:
+        vocab_word2index[word] = counter
+        counter += 1
 
-    return vocabulary_word2index, vocabulary_index2word
+    for i, word in enumerate(model.vocab):
+        vocab_word2index[word] = i + counter + special_index
+
+    vocab_index2word = {i:w for w, i in vocab_word2index}
+
+    return vocab_word2index, vocab_index2word
+
+
+def create_vocabulary_from_data(data_set, special_words):
+    vocab_word2index = {}
+    vocab_index2word = {}
+    counter = 0
+
+    for word in special_words:
+        vocab_word2index[word] = counter
+        counter += 1
+
+    for words in data_set:
+        if isinstance(words, list):
+            for word in words:
+                if not vocab_word2index.get(word, None):
+                    vocab_word2index[word] = counter
+                    counter += 1
+        else:
+            if not vocab_word2index.get(words, None):
+                vocab_word2index[words] = counter
+                counter += 1
+
+    vocab_index2word = {i:w for w, i in vocab_word2index}
+
+    return vocab_word2index, vocab_index2word
+
+
 
 
 def create_voabulary_y(training_data_path=zhihu_config[train_set_question_topic],
@@ -138,11 +168,17 @@ def parse_train_file(path):
 
             line = f.readline()
 
-def load_data(train_data_path,
-        paddings=zhihu_config[question_paddings_same],
-        word2vec_model_path=zhihu_config[word_embedding],
-        char2vec_model_path=zhihu_config[char_embedding],
-        label_path= zhihu_config[train_set_question_topic]):
+def load_data_none_embedding(train_data_path,
+        paddings=zhihu_config['question_paddings_same'],
+        label_path= zhihu_config['train_set_question_topic']):
+    load_datalowmem(train_data_path, paddings, label_path, None, None)
+
+def load_data_lowmem(train_data_path,
+        use_static_embedding = False,
+        paddings=zhihu_config['question_paddings_same'],
+        label_path= zhihu_config['train_set_question_topic'],
+        word2vec_model_path=zhihu_config['word_embedding'],
+        char2vec_model_path=zhihu_config['char_embedding']):
 
     Y, X_title_char, X_title_word, X_desc_char, X_desc_word = []*5
 
@@ -176,7 +212,7 @@ def load_data(train_data_path,
         X_title_char.append(tc)
         X_title_word.append(tw)
         X_desc_char.append(dc)
-        X_desc_word.appedn(dw)
+        X_desc_word.append(dw)
         Y.append(y)
 
     # pad sequences
@@ -193,12 +229,41 @@ def load_data(train_data_path,
 
     return X, Y, E
 
+def get_embedding(word2index, model_path):
+    if not model_path:
+        return None
+
+    word2vec_model = word2vec.load(model_path)
+
+    vocab_size = len(word2index)
+    embed_size = len(word2vec_model.vectors[0])
+
+    word_embedding = [None] * vocab_size
+
+    # for words can be found in model
+    for word, vector in zip(word2vec_model.vocab, word2vec_model.vectors):
+        if word in word2index.keys():
+            word_embedding[word2index[word]] = vector
+
+
+    # for words cannot be found in model
+    bound = np.sqrt(6.0) / np.sqrt(vocab_size)
+
+    for i in range(len(word2index)):
+        if not word_embedding[i]:
+            word_embedding[i] = np.random.uniform(-bound, bound, embed_size);
+
+    # convert to 2d array
+    word_embedding = np.array(word_embedding)
+
+    return word_embedding
+
 def _create_embedding(vocab, model_path):
     if not model_path:
         return None
 
     word2vec_model = word2vec.load(model_path)
-    vocab_szie = len(word2vec_model.vocab)
+    vocab_size = len(word2vec_model.vocab)
     word_embedding = [None] * vocab_size  # create an empty word_embedding list.
     for word, vector in zip(word2vec_model.vocab, word2vec_model.vectors):
         word_embedding[vocab.word2index[word]] = vector
