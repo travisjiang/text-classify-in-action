@@ -1,3 +1,5 @@
+# -*- coding: UTF-8 -*-
+
 from colorama import init
 from termcolor import colored
 import sklearn.datasets
@@ -7,15 +9,21 @@ import sklearn.cross_validation
 import sklearn.svm
 import sklearn.neighbors
 
+dataset_path_map = {
+        "20newsgroups": "dataset/en/20newsgroups"
+        }
+
 
 def load_files(dataset_name):
     files = None
+    path = dataset_path_map[dataset_name]
     if dataset_name == "20newsgroups":
         import data_util.newsgroups20 as newsgroups20
-        #files = newsgroups20.load_files_2_categories("dataset/en/20newsgroups")
-        files = newsgroups20.load_files_n_categories("dataset/en/20newsgroups")
+        #files = newsgroups20.load_files_2_categories(path)
+        files = newsgroups20.load_files_n_categories(path)
 
     return files
+
 
 
 def select_classifiers(clf_name="knn"):
@@ -61,6 +69,126 @@ def feature_tfidf(files_data):
         use_idf=True).fit(word_counts)
     X = tf_transformer.transform(word_counts)
     return X
+
+# 对卡方检验所需的 a b c d 进行计算
+# a：在这个分类下包含这个词的文档数量
+# b：不在该分类下包含这个词的文档数量
+# c：在这个分类下不包含这个词的文档数量
+# d：不在该分类下，且不包含这个词的文档数量
+
+def calc_chi(a, b, c, d):
+    result = float(pow(a*d-b*c, 2)) / float((a+c)*(a+b)*(b+d)*(c+d))
+    return result
+
+def feature_chi_with_tdidf(files, dataset_name, update=False):
+
+    feature_chi_path = dataset_path_map[dataset_name]+"/feature_chi.txt"
+
+    if not os.path.exists(feature_chi_path) or update:
+
+        total_doc_num, df_in_class_term, df_in_class, df_in_term = calc_chi_var(files)
+
+        chi_term_set = get_chi_iterm(df_in_class_term, df_in_class, df_in_term, total_doc_num, 1000)
+
+        save2file_feature(feature_chi_path, chi_term_set)
+
+    else:
+
+        chi_term_set = load_feature(feature_chi_path)
+
+    chi_data = convert_data_with_chi(files.data, chi_term_set)
+
+    return feature_tfidf(chi_data)
+
+def convert_data_with_chi(data, chi_term_set):
+    new_data = []
+    for i, doc in enumerate(data):
+        new_doc = [w for w in doc if w in chi_term_set]
+        new_data.append(new_doc)
+    return new_data
+
+
+
+def calc_chi_var(files):
+    total_doc_num = 0;
+
+    #doc frequency: in a class, and contains term
+    df_in_class_term = {}
+
+    #doc frequency: contains term
+    df_in_term = {}
+
+    #doc_frequency: in a class
+    df_in_class = {cls:0 for cls in range(len(files.target_names))}
+
+    for i, doc in enumerate(files.data):
+        doc_class = files.target[i]
+
+        df_in_class[doc_class] += 1
+
+        if not df_in_class_term.get(doc_class, None):
+            df_in_class_term[doc_class] = {}
+        df_tmp = df_in_class_term[doc_class]
+
+        total_doc_num += 1
+
+        for word in set(doc):
+            if word in df_tmp.keys():
+                df_tmp[word] = 0
+            else:
+                df_tmp[word] += 1
+
+            if word in df_in_term.keys():
+                df_in_term[word] = 0
+            else:
+                df_in_term[word] += 1
+
+    return total_doc_num, df_in_class_term, df_in_class, df_in_term
+
+
+def get_chi_term(df_in_class_term, df_in_class, df_in_term, total_doc_num, k):
+    chi_term_set = set()
+    for cls in df_in_class_term.keys():
+        df_tmp = df_in_class_term[cls]
+        term_chi = {}
+        for word in df_tmp:
+            a = df_tmp[word]
+            b = df_in_term[word]-a
+            doc_not_contain_term = total_doc_num - df_in_term[word]
+            c = df_in_class[cls] - a
+            d = doc_not_contain_term - c
+            term_chi[word] = calc_chi(a,b,c,d)
+
+        # this will return a sorted list of tuple
+        sorted_term_chi = sorted(term_chi.items(), key=lambda d:d[1], reverse=True)
+
+        l = k if k < len(sorted_term_chi) else len(sorted_term_chi)
+        for i in range(l):
+            chi_term_set.add(sorted_term_chi[i][0])
+
+        return chi_term_set
+
+def save2file_feature(path, feature_set):
+
+    with open(path, 'w') as f:
+        for feature in feature_set:
+            strip_feature = feature.strip(" ")
+            if len(strip_feature) > 0 and feature != " ":
+                file.write(feature + "\n")
+
+def load_feature(path):
+    feature_set = None
+    with open(path, 'r') as f:
+        feature_set = f.readlines()
+        feature_set = [str.strip(l) for l in feature_set if str.strip(l) != '']
+
+    return feature_set
+
+
+
+
+
+
 
 
 def main():

@@ -21,7 +21,7 @@ config_1 = {
 
 config_2 = {
         "dataset": "20newsgroups",
-        "features": "bow",
+        "features": "chi_tfidf",
         "classifiers":"knn"
         }
 
@@ -64,8 +64,8 @@ def main():
     X = util.select_features(files, feature_type=config["features"])
     Y = files.target
 
-    import pdb
-    pdb.set_trace()
+#    import pdb
+#    pdb.set_trace()
 
     clf = util.select_classifiers(config["classifiers"])
 
