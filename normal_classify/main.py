@@ -37,7 +37,7 @@ config_4 = {
         "classifiers":"naive_bayes"
         }
 
-config = config_4
+config = config_2
 
 
 
@@ -59,9 +59,10 @@ def test_classifier(X, y, clf, test_size=0.4, y_names=None, confusion=False):
 
 def main():
     # load_files
-    files = util.load_files(config["dataset"])
+    dataset_name = config["dataset"]
+    files = util.load_files(dataset_name)
 
-    X = util.select_features(files, feature_type=config["features"])
+    X = util.select_features(files, feature_type=config["features"], dataset_name = dataset_name)
     Y = files.target
 
 #    import pdb

@@ -18,7 +18,7 @@ def load_files_n_categories(path):
     dir_path = path or 'dataset'
 
     # remove non utf-8 file
-    remove_incompatible_files(dir_path)
+    #remove_incompatible_files(dir_path)
 
     print '\n\n'
 
@@ -41,7 +41,7 @@ def load_files_2_categories(path):
     reorganize_dataset(path)
 
 
-    remove_incompatible_files(dir_path)
+    #remove_incompatible_files(dir_path)
 
     print '\n\n'
 
