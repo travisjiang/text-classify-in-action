@@ -38,13 +38,20 @@ config_4 = {
         }
 
 config_5 = {
-        "dataset": "sogoucut",
+        "dataset": "sogou_cut",
         "features": "chi_tfidf",
         "classifiers":"svm",
         "cutted":True
         }
 
-config = config_5
+config_6 = {
+        "dataset": "netease_cut",
+        "features": "tfidf",
+        "classifiers":"knn",
+        "cutted":True
+        }
+
+config = config_6
 
 
 

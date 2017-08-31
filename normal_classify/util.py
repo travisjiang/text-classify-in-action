@@ -15,7 +15,8 @@ import nltk.tokenize
 
 dataset_path_map = {
         "20newsgroups": "dataset/en/20newsgroups",
-        "sogoucut": "dataset/cn/SogouCCut"
+        "sogou_cut": "dataset/cn/SogouCCut",
+        "netease_cut" : "dataset/cn/netease"
         }
 
 
@@ -26,9 +27,12 @@ def load_files(dataset_name):
         import data_util.newsgroups20 as newsgroups20
         #files = newsgroups20.load_files_2_categories(path)
         files = newsgroups20.load_files_n_categories(path)
-    if dataset_name == "sogoucut":
+    if dataset_name == "sogou_cut":
         import data_util.sogou as sogou
         files = sogou.load_files_n_categories(path)
+    if dataset_name == "netease_cut":
+        import data_util.netease as netease
+        files = netease.load_files_n_categories(path)
 
     return files
 
