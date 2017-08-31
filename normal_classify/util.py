@@ -14,7 +14,8 @@ import nltk.tokenize
 #from nltk.tokenize import WordPunctTokenizer
 
 dataset_path_map = {
-        "20newsgroups": "dataset/en/20newsgroups"
+        "20newsgroups": "dataset/en/20newsgroups",
+        "sogoucut": "dataset/cn/SogouCCut"
         }
 
 
@@ -25,6 +26,9 @@ def load_files(dataset_name):
         import data_util.newsgroups20 as newsgroups20
         #files = newsgroups20.load_files_2_categories(path)
         files = newsgroups20.load_files_n_categories(path)
+    if dataset_name == "sogoucut":
+        import data_util.sogou as sogou
+        files = sogou.load_files_n_categories(path)
 
     return files
 
@@ -46,13 +50,13 @@ def select_classifiers(clf_name="knn"):
     return clf
 
 
-def select_features(files, feature_type, dataset_name):
+def select_features(files, feature_type, dataset_name, cutted=False):
     if feature_type == "bow":
         return feature_bow(files.data)
     elif feature_type == "tfidf":
         return feature_tfidf(files.data)
     elif feature_type == "chi_tfidf":
-        return feature_chi_with_tfidf(files, dataset_name)
+        return feature_chi_with_tfidf(files, dataset_name, cutted=cutted)
 
 
 def feature_bow(files_data):
@@ -62,7 +66,7 @@ def feature_bow(files_data):
     returns a `scipy.sparse.coo_matrix`
     """
 
-    count_vector = sklearn.feature_extraction.text.CountVectorizer()
+    count_vector = sklearn.feature_extraction.text.CountVectorizer(decode_error='ignore')
     return count_vector.fit_transform(files_data)
 
 
@@ -77,9 +81,14 @@ def feature_tfidf(files_data):
     return X
 
 
-def word_tokenize(doc):
+def word_tokenize(doc, space_seg=False):
     #words_set = nltk.tokenize.WordPunctTokenizer().tokenize(doc)
-    return nltk.tokenize.TweetTokenizer().tokenize(doc)
+    if space_seg:
+        import re
+        r = re.compile(r"\s+")
+        return r.split(doc)
+    else:
+        return nltk.tokenize.TweetTokenizer().tokenize(doc)
 
 
 # 对卡方检验所需的 a b c d 进行计算
@@ -92,7 +101,7 @@ def calc_chi(a, b, c, d):
     result = float(pow(a*d-b*c, 2)) / float((a+c)*(a+b)*(b+d)*(c+d))
     return result
 
-def feature_chi_with_tfidf(files, dataset_name, update=False):
+def feature_chi_with_tfidf(files, dataset_name, update=False, cutted = False):
     print("select feature: chi with tfidf")
 
     feature_chi_path = dataset_path_map[dataset_name]+"/feature_chi.txt"
@@ -100,7 +109,7 @@ def feature_chi_with_tfidf(files, dataset_name, update=False):
     if not os.path.exists(feature_chi_path) or update:
         print("generate chi feature file...")
 
-        total_doc_num, df_in_class_term, df_in_class, df_in_term = calc_chi_var(files)
+        total_doc_num, df_in_class_term, df_in_class, df_in_term = calc_chi_var(files, cutted)
 
         chi_term_set = get_chi_term(df_in_class_term, df_in_class, df_in_term, total_doc_num, 1000)
 
@@ -113,21 +122,21 @@ def feature_chi_with_tfidf(files, dataset_name, update=False):
 
 
     print("convert data using chi feature...")
-    chi_data = convert_data_with_chi(files.data, chi_term_set)
+    chi_data = convert_data_with_chi(files.data, chi_term_set, cutted)
 
     print("calc chi feature weights by tfidf...")
     return feature_tfidf(chi_data)
 
-def convert_data_with_chi(data, chi_term_set):
+def convert_data_with_chi(data, chi_term_set, cutted):
     new_data = []
     for i, doc in enumerate(data):
-        new_doc = [w for w in word_tokenize(doc) if w in chi_term_set]
+        new_doc = [w for w in word_tokenize(doc, cutted) if w in chi_term_set]
         new_data.append(" ".join(new_doc))
     return new_data
 
 
 
-def calc_chi_var(files):
+def calc_chi_var(files, cutted):
     total_doc_num = 0;
 
     #doc frequency: in a class, and contains term
@@ -150,8 +159,7 @@ def calc_chi_var(files):
 
         total_doc_num += 1
 
-        word_set = word_tokenize(doc)
-
+        words_set = word_tokenize(doc, cutted)
         for word in words_set:
             if not df_tmp.get(word, None):
                 df_tmp[word] = 1

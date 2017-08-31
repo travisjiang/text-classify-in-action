@@ -33,11 +33,18 @@ config_3 = {
 
 config_4 = {
         "dataset": "20newsgroups",
-        "features": "bow",
+        "features": "chi_tfidf",
         "classifiers":"naive_bayes"
         }
 
-config = config_2
+config_5 = {
+        "dataset": "sogoucut",
+        "features": "chi_tfidf",
+        "classifiers":"svm",
+        "cutted":True
+        }
+
+config = config_5
 
 
 
@@ -62,7 +69,8 @@ def main():
     dataset_name = config["dataset"]
     files = util.load_files(dataset_name)
 
-    X = util.select_features(files, feature_type=config["features"], dataset_name = dataset_name)
+    X = util.select_features(files, feature_type=config["features"],
+            dataset_name = dataset_name, cutted=config.get("cutted", False))
     Y = files.target
 
 #    import pdb
