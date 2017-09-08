@@ -60,7 +60,9 @@ def select_features(files, feature_type, dataset_name, cutted=False):
     elif feature_type == "tfidf":
         return feature_tfidf(files.data)
     elif feature_type == "chi_tfidf":
-        return feature_chi_with_tfidf(files, dataset_name, cutted=cutted)
+        return feature_chi(files, dataset_name, cutted=cutted, weight="tfidf")
+    elif feature_type == "chi_bow":
+        return feature_chi(files, dataset_name, cutted=cutted, weight="bow")
 
 
 def feature_bow(files_data):
@@ -105,8 +107,8 @@ def calc_chi(a, b, c, d):
     result = float(pow(a*d-b*c, 2)) / float((a+c)*(a+b)*(b+d)*(c+d))
     return result
 
-def feature_chi_with_tfidf(files, dataset_name, update=False, cutted = False):
-    print("select feature: chi with tfidf")
+def feature_chi(files, dataset_name, update=False, cutted = False, weight="tfidf"):
+    print("select feature: chi square")
 
     feature_chi_path = dataset_path_map[dataset_name]+"/feature_chi.txt"
 
@@ -128,7 +130,9 @@ def feature_chi_with_tfidf(files, dataset_name, update=False, cutted = False):
     print("convert data using chi feature...")
     chi_data = convert_data_with_chi(files.data, chi_term_set, cutted)
 
-    print("calc chi feature weights by tfidf...")
+    print("calc chi feature weights by %s..." % weight)
+    if weight == "bow":
+        return feature_bow(chi_data)
     return feature_tfidf(chi_data)
 
 def convert_data_with_chi(data, chi_term_set, cutted):
@@ -286,6 +290,25 @@ def cross_validation(data, target, classifier, cv=5):
     """
     return sklearn.cross_validation.cross_val_score(classifier, data, target, cv=cv)
 
+def test_chi_stopwords(chi_path, stop_path):
+    chi_set, stop_set = None, None
+    with open(chi_path, 'r') as f:
+        lines = f.readlines()
+        words_list = [w.strip() for w in lines]
+        chi_set = set(words_list)
+
+    with open(stop_path, 'r') as f:
+        lines = f.readlines()
+        words_list = [w.strip() for w in lines]
+        stop_set = set(words_list)
+
+    return chi_set & stop_set
+
 
 if __name__ == '__main__':
-    main()
+    #main()
+    #####################test stop_words and chisquare term########################
+    #same_part = test_chi_stopwords("./dataset/cn/SogouCCut/feature_chi.txt", "./dataset/hanlp_stopwords.txt")
+    same_part = test_chi_stopwords("./dataset/cn/netease/feature_chi.txt", "./dataset/hanlp_stopwords.txt")
+    print(len(same_part))
+    print(same_part)

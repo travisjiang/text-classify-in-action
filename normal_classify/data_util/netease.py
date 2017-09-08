@@ -80,9 +80,20 @@ def clean_dataset(path, input_dir, output_dir):
         shell_iconv = "iconv -c -t UTF-8 < %s > %s" % (output_file, output_file)
         os.system(shell_iconv)
 
-def segment_dataset(path, input_dir, output_dir):
+def segment_dataset(path, input_dir, output_dir, stop_words_path=None):
     if not os.path.exists(os.path.join(path, output_dir)):
         os.makedirs(os.path.join(path, output_dir))
+    stop_words = set()
+    try:
+        with open(stop_words_path, 'r') as f:
+            lines = f.readlines()
+            # convert utf-8 to unicode
+            stop_words = set([w.strip().decode('utf8') for w in lines])
+    except IOError as err:
+        print("File Error:"+str(err))
+    except TypeError as err:
+        print("File Error:"+str(err))
+    print(stop_words)
 
     files = glob.glob(os.path.join(path, input_dir, "*"))
     for f in files:
@@ -92,10 +103,10 @@ def segment_dataset(path, input_dir, output_dir):
             with open(os.path.join(path, output_dir, f_name), 'w') as fout:
                 doc = fin.readlines()
                 for line in doc:
+                    # jieba will convert utf8 to unicode
                     seg_list = jieba.cut(line)
+                    seg_list = [w for w in seg_list if w not in stop_words]
                     new_line = " ".join(seg_list)
-                    #import pdb
-                    #pdb.set_trace()
                     fout.write(new_line)
 
 
@@ -113,10 +124,12 @@ def reorganize_dataset(path, input_dir):
 
 def main():
     path = "../dataset/cn/netease"
+    #stop_words_path = "../dataset/hanlp_stopwords.txt"
+    stop_words_path = None
 
     #clean_dataset(path, "origin", "cleaned")
 
-    segment_dataset(path, "cleaned", "cutted")
+    segment_dataset(path, "origin", "cutted", stop_words_path)
 
     reorganize_dataset(path, "cutted")
 

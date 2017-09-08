@@ -40,14 +40,14 @@ config_4 = {
 config_5 = {
         "dataset": "sogou_cut",
         "features": "chi_tfidf",
-        "classifiers":"svm",
+        "classifiers":"naive_bayes",
         "cutted":True
         }
 
 config_6 = {
         "dataset": "netease_cut",
-        "features": "tfidf",
-        "classifiers":"knn",
+        "features": "chi_tfidf",
+        "classifiers":"svm",
         "cutted":True
         }
 
